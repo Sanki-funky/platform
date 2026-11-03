@@ -1,0 +1,11 @@
+[
+  {"name":"platform","description":"Sank workspace setup, shared documentation, local orchestration and cloud infrastructure"},
+  {"name":"tenant-service","description":"Sank tenants, locations, memberships and plan limits"},
+  {"name":"catalog-service","description":"Sank ingredients, menu products, units and versioned recipes"},
+  {"name":"sales-service","description":"Sank sales recording, cancellations and transactional outbox"},
+  {"name":"inventory-service","description":"Sank stock movements, event store, counts and stock thresholds"},
+  {"name":"purchasing-service","description":"Sank suppliers, purchase orders, receiving and document delivery"},
+  {"name":"reporting-service","description":"Sank event projections, dashboards and GraphQL queries"},
+  {"name":"frontend","description":"Sank React, Vite and TypeScript user interface"},
+  {"name":"document-fn","description":"Sank Python Azure Function for PDF generation and Blob Storage"}
+]
