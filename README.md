@@ -30,7 +30,7 @@ Keycloak needs its own persistence too; no business service should use its table
 
 Each business-service repo owns its source, dependencies, tests, migrations, Dockerfile, contracts, CI and service Helm chart. Platform owns shared infrastructure and environment values. Keep each OpenAPI/protobuf/event schema with its producer initially, and publish versioned contracts when consumers need them. Share transport contracts, not internal domain entities or one ORM model across services.
 
-## 3. Create and clone the repositories
+## 3. Create, clone, and update the repositories
 
 Prerequisites: Python 3.9+, Git, GitHub CLI, organization repository-creation permission and working Git authentication. Authenticate with `gh auth login` if needed. Configure the organization's default branch as `main` before initializing the service repos.
 
@@ -81,7 +81,25 @@ PROJECT/                       # local workspace; not a parent Git repo
   document-fn/
 ```
 
-Adrian's onboarding is: clone `platform` into a workspace, then run `python3 platform/scripts/repos.py clone`. Each clone has its own commits and remotes. No submodules are necessary. Existing checkouts are checked for the expected origin and left unchanged. Fetch/pull within the repo you are working on; this tool deliberately does not merge across all working trees. A custom workspace is supported with `clone --workspace /absolute/path`.
+Adrian's onboarding is: clone `platform` into a workspace, then run `python3 platform/scripts/repos.py clone`. Each clone has its own commits and remotes. No submodules are necessary. The `clone` command checks existing checkouts for the expected origin and leaves them unchanged.
+
+### Pull updates across the workspace
+
+From the workspace root on Windows (PowerShell):
+
+```powershell
+python .\platform\scripts\repos.py pull
+```
+
+From the workspace root on macOS or Linux:
+
+```bash
+python3 platform/scripts/repos.py pull
+```
+
+`pull` updates the current branch of each checkout in `repositories.json`, including `platform`. Run `clone` first if any checkout is missing. Both commands accept `--workspace PATH` to use a different directory containing the checkouts.
+
+Each checkout must have the expected GitHub `origin`, a branch tracking `origin`, and no uncommitted changes. Updates are fast-forward only: the script does not switch branches, stash changes, rebase, or create merge commits. It stops at the first error (including a diverged branch); checkouts updated before that error stay updated.
 
 ## 4. Go onion structure
 

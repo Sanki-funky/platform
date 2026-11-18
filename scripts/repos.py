@@ -1,4 +1,4 @@
-"""Create or clone the explicit Sank repository list. Standard library only."""
+"""Create, clone, or pull the explicit Sank repository list. Standard library only."""
 
 import argparse
 import json
@@ -68,6 +68,22 @@ def create(repositories, visibility):
             run(creation_command(repository, visibility))
 
 
+def checkout_git(destination, name):
+    if not (destination / ".git").exists():
+        raise ValueError(f"Existing path is not a checkout: {destination}")
+    git = ["git", "-C", str(destination)]
+    origin = run([*git, "remote", "get-url", "origin"], capture=True).stdout.strip()
+    expected = (
+        f"git@github.com:{ORG}/{name}.git",
+        f"https://github.com/{ORG}/{name}.git",
+        f"https://github.com/{ORG}/{name}",
+        f"ssh://git@github.com/{ORG}/{name}.git",
+    )
+    if origin not in expected:
+        raise ValueError(f"Unexpected origin for {destination}: {origin}")
+    return git
+
+
 def clone(repositories, workspace):
     workspace = workspace.resolve()
     workspace.mkdir(parents=True, exist_ok=True)
@@ -78,30 +94,28 @@ def clone(repositories, workspace):
             print(f"Using local platform directory: {ROOT}", flush=True)
             continue
         if destination.exists() or destination.is_symlink():
-            if not (destination / ".git").exists():
-                raise ValueError(f"Existing path is not a checkout: {destination}")
-            origin = run(
-                [
-                    "git",
-                    "-C",
-                    str(destination),
-                    "remote",
-                    "get-url",
-                    "origin",
-                ],
-                capture=True,
-            ).stdout.strip()
-            expected = (
-                f"git@github.com:{ORG}/{name}.git",
-                f"https://github.com/{ORG}/{name}.git",
-                f"https://github.com/{ORG}/{name}",
-                f"ssh://git@github.com/{ORG}/{name}.git",
-            )
-            if origin not in expected:
-                raise ValueError(f"Unexpected origin for {destination}: {origin}")
+            checkout_git(destination, name)
             print(f"Already cloned: {name} (working tree unchanged)", flush=True)
         else:
             run(["gh", "repo", "clone", f"{ORG}/{name}", str(destination)])
+
+
+def pull(repositories, workspace):
+    workspace = workspace.resolve()
+    for repository in repositories:
+        name = repository["name"]
+        destination = workspace / name
+        if not destination.exists() and not destination.is_symlink():
+            raise ValueError(f"Missing checkout: {destination}. Run clone first.")
+        git = checkout_git(destination, name)
+        if run(
+            [*git, "status", "--porcelain", "--untracked-files=normal"], capture=True
+        ).stdout:
+            raise ValueError(
+                f"Uncommitted changes in {destination}; commit or stash them first"
+            )
+        print(f"Pulling: {name}", flush=True)
+        run([*git, "pull", "--ff-only", "--no-rebase", "--no-autostash", "origin"])
 
 
 def main():
@@ -117,6 +131,10 @@ def main():
         "clone", help="Clone missing repos; never pull/reset existing ones"
     )
     cloning.add_argument("--workspace", type=Path, default=ROOT.parent)
+    pulling = commands.add_parser(
+        "pull", help="Fast-forward existing checkouts from GitHub"
+    )
+    pulling.add_argument("--workspace", type=Path, default=ROOT.parent)
     args = parser.parse_args()
     repositories = load_repositories()
     if args.command == "plan":
@@ -124,8 +142,10 @@ def main():
             print(shlex.join(creation_command(repository, args.visibility)))
     elif args.command == "create":
         create(repositories, args.visibility)
-    else:
+    elif args.command == "clone":
         clone(repositories, args.workspace)
+    else:
+        pull(repositories, args.workspace)
 
 
 if __name__ == "__main__":
