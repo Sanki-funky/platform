@@ -30,4 +30,3 @@ This documentation is based on the project proposal, `Prijava_projekta_Sank.pdf`
 - [Go module layout](https://go.dev/doc/modules/layout)
 - [Clean architecture dependency rule](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html)
 - [Data ownership in microservices](https://learn.microsoft.com/en-us/azure/architecture/microservices/design/data-considerations)
-- [GitHub CLI repository creation](https://cli.github.com/manual/gh_repo_create)

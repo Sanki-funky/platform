@@ -6,10 +6,12 @@ Git talk to a bare repository in a temporary folder instead.
 
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
+import os
 from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import repos
 
@@ -166,10 +168,26 @@ class PullTests(WorkspaceTestCase):
         self.assertNotEqual(self.head(checkout, "origin/main"),
                             self.head(self.remotes["catalog-service"][1]))
 
-    def test_missing_checkout_is_reported(self):
-        attention, output = self.call(repos.pull, ["catalog-service"])
+    def test_missing_checkout_is_cloned(self):
+        bare = self.remote("catalog-service")
+        rewrite = {  # point the GitHub URL at the local bare repo for this clone
+            "GIT_CONFIG_COUNT": "1",
+            "GIT_CONFIG_KEY_0": f"url.{bare}.insteadOf",
+            "GIT_CONFIG_VALUE_0": repos.clone_url("catalog-service"),
+        }
+        with patch.dict(os.environ, rewrite):
+            attention, output = self.call(repos.pull, ["catalog-service"])
+        self.assertFalse(attention)
+        self.assertIn("cloned", output)
+        checkout = self.workspace / "catalog-service"
+        self.assertEqual((checkout / "changes.txt").read_text(), "first")
+        self.assertEqual(self.git(checkout, "config", "remote.origin.url"),
+                         repos.clone_url("catalog-service"))
+
+    def test_missing_checkout_is_reported_by_status(self):
+        attention, output = self.call(repos.status, ["catalog-service"])
         self.assertTrue(attention)
-        self.assertIn("missing locally", output)
+        self.assertIn("run pull to clone it", output)
 
     def test_platform_is_pulled_last(self):
         self.checkout("platform")

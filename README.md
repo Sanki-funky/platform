@@ -6,19 +6,13 @@ The services each have their own code and release cycle. Platform holds the thin
 
 ## Get the repositories
 
-You'll need Python 3.9+, Git and the GitHub CLI (`gh`). Sign in once if you haven't already:
+You'll need Python 3.9+ and Git, signed in to GitHub so Git can reach our private repos (`gh auth login` is the easiest way). Clone platform into an empty project folder, then run this **inside the platform folder**:
 
 ```bash
-gh auth login
+python3 scripts/repos.py pull
 ```
 
-Run these commands **inside the platform folder**:
-
-```bash
-python3 scripts/repos.py clone
-```
-
-This downloads the repositories listed in [repositories.json](repositories.json), next to this folder. It skips anything you've already cloned.
+The first run clones every repository listed in [repositories.json](repositories.json) next to the platform folder. After that, the same command keeps them up to date.
 
 Day to day you'll use three commands:
 
@@ -56,22 +50,7 @@ Then `sank status`, `sank pull` and `sank push` work in `PROJECT/`, `PROJECT/pla
 
 The output is coloured when you run it in a terminal. Set `NO_COLOR=1` to turn that off.
 
-## Other script commands
-
-```bash
-# See which GitHub repositories would be created. Changes nothing.
-python3 scripts/repos.py plan
-
-# Create any missing repositories in Sanki-funky.
-python3 scripts/repos.py create --visibility private
-
-# Clone into a different workspace.
-python3 scripts/repos.py clone --workspace ~/projects/sank
-```
-
-Use `--visibility public` if you want public repositories. Existing repos keep their current settings. `status`, `pull` and `push` also accept `--workspace`.
-
-The script handles repositories only. It doesn't start services or deploy the app. [Repository setup](docs/repository-setup.md) covers the one-time publishing steps and a couple of common questions.
+All three commands accept `--workspace PATH` if your checkouts live somewhere other than the folder around platform. The script handles repositories only. It doesn't start services or deploy the app. [Repository setup](docs/repository-setup.md) has the details, plus how to add a new repository.
 
 ## Project docs
 

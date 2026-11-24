@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Manage the Šank repositories: create, clone, status, pull and push. Standard library only."""
+"""Keep every Šank repository in sync: status, pull and push. Standard library only."""
 
 import argparse
 from dataclasses import dataclass
@@ -91,10 +91,6 @@ def heading(text):
 
 # Git helpers ----------------------------------------------------------------
 
-def run(args, *, capture=False):
-    return subprocess.run(args, check=True, text=True, capture_output=capture)
-
-
 def git(path, *args, check=True):
     return subprocess.run(
         ["git", "-C", str(path), *args], check=check, text=True, capture_output=True
@@ -184,48 +180,12 @@ def checkouts(repositories, workspace):
 
 # Commands -------------------------------------------------------------------
 
-def creation_command(repository, visibility):
-    command = [
-        "gh", "repo", "create", f"{ORG}/{repository['name']}",
-        f"--{visibility}", "--description", repository["description"],
-    ]
-    # This local directory supplies platform's first commit. Avoid unrelated histories.
-    if repository["name"] != "platform":
-        command.append("--add-readme")
-    return command
-
-
-def create(repositories, visibility):
-    # Stop on authentication/network errors; do not mistake them for missing repos.
-    existing = set(
-        run(
-            ["gh", "api", "--paginate", f"orgs/{ORG}/repos?per_page=100", "--jq", ".[].name"],
-            capture=True,
-        ).stdout.splitlines()
-    )
-    for repository in repositories:
-        if repository["name"] in existing:
-            print(f"Exists: {ORG}/{repository['name']} (settings unchanged)", flush=True)
-        else:
-            run(creation_command(repository, visibility))
-
-
-def clone(repositories, workspace):
-    workspace.mkdir(parents=True, exist_ok=True)
-    report = Report([repository["name"] for repository in repositories])
-    heading(f"Cloning into {workspace}")
-    for name, path in checkouts(repositories, workspace):
-        try:
-            if path.exists() or path.is_symlink():
-                check_checkout(path, name)
-                report.line("same", name, "", "already cloned (left unchanged)")
-            else:
-                run(["gh", "repo", "clone", f"{ORG}/{name}", str(path), "--", "--quiet"],
-                    capture=True)
-                report.line("cloned", name, MAIN, "cloned")
-        except (OSError, ValueError, subprocess.CalledProcessError) as error:
-            report.line("fail", name, "", error_text(error))
-    return report.summary()
+def clone_url(name):
+    """Clone over SSH if platform itself was cloned over SSH, otherwise HTTPS."""
+    platform = git(ROOT, "config", "--get", "remote.origin.url", check=False).stdout
+    if platform.startswith(("git@", "ssh://")):
+        return f"git@github.com:{ORG}/{name}.git"
+    return f"https://github.com/{ORG}/{name}.git"
 
 
 def sync_local_main(path, current_branch):
@@ -285,10 +245,12 @@ def pull(repositories, workspace):
     report = Report([repository["name"] for repository in repositories])
     heading(f"Pulling {len(repositories)} repositories in {workspace}")
     for name, path in checkouts(repositories, workspace):
-        if not path.exists():
-            report.line("warn", name, "", "missing locally", "run the clone command")
-            continue
         try:
+            if not path.exists():
+                workspace.mkdir(parents=True, exist_ok=True)
+                git(workspace, "clone", "--quiet", clone_url(name), str(path))
+                report.line("cloned", name, git_out(path, "branch", "--show-current"), "cloned")
+                continue
             check_checkout(path, name)
             branch, kind, message, hint = pull_one(path)
             report.line(kind, name, branch, message, hint)
@@ -345,7 +307,7 @@ def push(repositories, workspace, *, allow_main=False, assume_yes=False):
     plans = []
     for name, path in checkouts(repositories, workspace):
         if not path.exists():
-            report.line("warn", name, "", "missing locally", "run the clone command")
+            report.line("warn", name, "", "missing locally", "run pull to clone it")
             continue
         try:
             check_checkout(path, name)
@@ -390,7 +352,7 @@ def status(repositories, workspace):
     heading(f"Status of {len(repositories)} repositories in {workspace}")
     for name, path in checkouts(repositories, workspace):
         if not path.exists():
-            report.line("warn", name, "", "missing locally", "run the clone command")
+            report.line("warn", name, "", "missing locally", "run pull to clone it")
             continue
         try:
             check_checkout(path, name)
@@ -433,22 +395,15 @@ def load_repositories():
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
-    plan = commands.add_parser("plan", help="Print creation commands; no network or changes")
-    plan.add_argument("--visibility", choices=["private", "public"], default="private")
-    creation = commands.add_parser("create", help="Create missing GitHub repositories")
-    creation.add_argument("--visibility", choices=["private", "public"], required=True)
-
     workspace = argparse.ArgumentParser(add_help=False)
     workspace.add_argument(
         "--workspace", type=Path, default=ROOT.parent,
         help="folder containing the checkouts (default: the folder around platform)",
     )
-    commands.add_parser("clone", parents=[workspace],
-                        help="Clone missing repos; never touch existing ones")
     commands.add_parser("status", parents=[workspace],
                         help="Show branch, commits to push/pull and local changes per repo")
     commands.add_parser("pull", parents=[workspace],
-                        help="Fast-forward every repo's current branch (and local main)")
+                        help="Clone missing repos and fast-forward every repo's current branch")
     pushing = commands.add_parser("push", parents=[workspace],
                                   help="Push every repo's current branch after confirming")
     pushing.add_argument("--main", action="store_true",
@@ -457,16 +412,7 @@ def main():
 
     args = parser.parse_args()
     repositories = load_repositories()
-    if args.command == "plan":
-        for repository in repositories:
-            print(shlex.join(creation_command(repository, args.visibility)))
-        return False
-    if args.command == "create":
-        create(repositories, args.visibility)
-        return False
     workspace = args.workspace.expanduser().resolve()
-    if args.command == "clone":
-        return clone(repositories, workspace)
     if args.command == "status":
         return status(repositories, workspace)
     if args.command == "pull":
@@ -476,11 +422,11 @@ def main():
 
 if __name__ == "__main__":
     if os.name == "nt":
-        os.system("")  
+        os.system("")
     for stream in (sys.stdout, sys.stderr):
         reconfigure = getattr(stream, "reconfigure", None)
         if reconfigure:
-            reconfigure(errors="replace")  
+            reconfigure(errors="replace")
     try:
         sys.exit(1 if main() else 0)
     except (OSError, ValueError, KeyError, subprocess.CalledProcessError) as error:
