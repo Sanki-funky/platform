@@ -14,7 +14,7 @@ catalog-service/
       postgres/
       nats/
     web/
-      http/
+      httpapi/
       grpc/
   api/
     openapi.yaml
